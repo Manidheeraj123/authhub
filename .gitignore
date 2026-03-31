@@ -1,0 +1,5 @@
+# node_modules/ → avoids pushing large dependency files
+node_modules/
+
+# .env → prevents exposing sensitive data like database URIs and JWT secrets
+.env
