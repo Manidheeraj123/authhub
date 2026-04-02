@@ -35,18 +35,52 @@ const registerUser = async (req, res) => {
       password
     });
 
-    if (user) {
-      res.status(201).json({
-        _id: user.id,
-        name: user.name,
+    // Generate validation token
+    const verificationToken = user.getVerificationToken();
+    await user.save({ validateBeforeSave: false });
+
+    // Create verification URL
+    const verifyUrl = `${req.protocol}://${req.get('host')}/api/auth/verifyemail/${verificationToken}`;
+
+    const message = `Welcome to AuthHub! Please confirm your email address by making a GET request to: \n\n ${verifyUrl}`;
+
+    try {
+      await sendEmail({
         email: user.email,
-        role: user.role,
-        token: generateToken(user._id),
-        refreshToken: generateRefreshToken(user._id)
+        subject: 'Verify your email address',
+        message
       });
-    } else {
-      res.status(400).json({ message: 'Invalid user data' });
+
+      res.status(201).json({ message: 'Registration successful! Please check your email to verify your account.' });
+    } catch (err) {
+      console.error(err);
+      user.emailVerificationToken = undefined;
+      await user.save({ validateBeforeSave: false });
+      return res.status(500).json({ message: 'Email could not be sent' });
     }
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const verifyEmail = async (req, res) => {
+  try {
+    const emailVerificationToken = crypto
+      .createHash('sha256')
+      .update(req.params.verifytoken)
+      .digest('hex');
+
+    const user = await User.findOne({ emailVerificationToken });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid verification token' });
+    }
+
+    user.isVerified = true;
+    user.emailVerificationToken = undefined;
+    await user.save();
+
+    res.status(200).json({ message: 'Email verified successfully. You may now log in.' });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -58,34 +92,76 @@ const loginUser = async (req, res) => {
 
     const user = await User.findOne({ email });
 
-    if (user && (await user.matchPassword(password))) {
-      res.json({
-        _id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        token: generateToken(user._id),
-        refreshToken: generateRefreshToken(user._id)
-      });
-    } else {
-      res.status(401).json({ message: 'Invalid email or password' });
+    if (!user || !(await user.matchPassword(password))) {
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
-};
 
-const getDashboard = async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('-password');
-    res.status(200).json({
-      message: 'Welcome to the dashboard',
-      user
+    if (!user.isVerified) {
+      return res.status(401).json({ message: 'Your email address is not verified. Please check your inbox.' });
+    }
+
+    res.json({
+      _id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      token: generateToken(user._id),
+      refreshToken: generateRefreshToken(user._id)
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+const getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    res.status(200).json({ user });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const updateDetails = async (req, res) => {
+  try {
+    const fieldsToUpdate = {
+      name: req.body.name,
+      email: req.body.email
+    };
+
+    const user = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
+      new: true,
+      runValidators: true
+    }).select('-password');
+
+    res.status(200).json({ user });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const updatePassword = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    // Check current password
+    if (!(await user.matchPassword(req.body.currentPassword))) {
+      return res.status(401).json({ message: 'Password is incorrect' });
+    }
+
+    user.password = req.body.newPassword;
+    await user.save();
+
+    res.status(200).json({
+      token: generateToken(user._id),
+      refreshToken: generateRefreshToken(user._id)
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const getDashboard = async (req, res) => { ... } // Replaced at the bottom below
 
 const forgotPassword = async (req, res) => {
   try {
@@ -188,9 +264,25 @@ const refreshToken = async (req, res) => {
   }
 };
 
+const getDashboard = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    res.status(200).json({
+      message: 'Welcome to the dashboard',
+      user
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   registerUser,
+  verifyEmail,
   loginUser,
+  getMe,
+  updateDetails,
+  updatePassword,
   getDashboard,
   forgotPassword,
   resetPassword,
