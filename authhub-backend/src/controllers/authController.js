@@ -13,11 +13,13 @@ const generateRefreshToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_REFRESH_EXPIRE || '30d',
   });
-};
+}; 
 
 const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
+
+    console.log(req.body);
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Please add all fields' });
@@ -161,7 +163,7 @@ const updatePassword = async (req, res) => {
   }
 };
 
-const getDashboard = async (req, res) => { ... } // Replaced at the bottom below
+// const getDashboard = async (req, res) => { ... } // Replaced at the bottom below
 
 const forgotPassword = async (req, res) => {
   try {
@@ -247,11 +249,11 @@ const refreshToken = async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
-    
+
     // Check if user still exists
     const user = await User.findById(decoded.id);
     if (!user) {
-        return res.status(401).json({ message: 'Invalid token' });
+      return res.status(401).json({ message: 'Invalid token' });
     }
 
     res.status(200).json({

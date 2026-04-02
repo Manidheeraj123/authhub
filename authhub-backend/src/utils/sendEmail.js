@@ -1,6 +1,16 @@
 const nodemailer = require('nodemailer');
 
 const sendEmail = async (options) => {
+  // If SMTP is not actively configured, mock the email to the terminal!
+  if (process.env.SMTP_EMAIL === 'your_mailtrap_user' || !process.env.SMTP_EMAIL) {
+    console.log('\n====== MOCK EMAIL INTERCEPTED ======');
+    console.log(`To: ${options.email}`);
+    console.log(`Subject: ${options.subject}`);
+    console.log(`Text:\n${options.message}`);
+    console.log('====================================\n');
+    return;
+  }
+
   // Create a transporter
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,

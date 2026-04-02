@@ -37,9 +37,10 @@ app.use(hpp());
 app.use(cors());
 
 // Routes
+app.get('/', (req, res) => res.send('AuthHub API is running smoothly. Use Postman or your Frontend UI (Port 5173) to interact with the endpoints!'));
 app.use('/api/auth', require('./src/routes/authRoutes'));
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4500;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
